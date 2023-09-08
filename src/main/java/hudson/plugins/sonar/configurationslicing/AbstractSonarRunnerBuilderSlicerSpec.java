@@ -24,11 +24,12 @@ import hudson.model.Project;
 import hudson.plugins.sonar.SonarRunnerBuilder;
 import hudson.plugins.sonar.utils.Logger;
 import hudson.tasks.Builder;
+import jenkins.model.Jenkins;
+import org.apache.commons.lang.StringUtils;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import jenkins.model.Jenkins;
-import org.apache.commons.lang.StringUtils;
 
 public abstract class AbstractSonarRunnerBuilderSlicerSpec extends UnorderedStringSlicerSpec<Project<?, ?>> {
 

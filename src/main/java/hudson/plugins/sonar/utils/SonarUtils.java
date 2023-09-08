@@ -20,15 +20,19 @@
 package hudson.plugins.sonar.utils;
 
 import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import com.cloudbees.plugins.credentials.common.UsernamePasswordCredentials;
 import hudson.EnvVars;
 import hudson.FilePath;
-import hudson.model.Action;
-import hudson.model.Actionable;
-import hudson.model.Result;
-import hudson.model.Run;
-import hudson.model.TaskListener;
+import hudson.model.*;
 import hudson.plugins.sonar.SonarInstallation;
 import hudson.plugins.sonar.action.SonarAnalysisAction;
+import hudson.plugins.sonar.action.SonarScannerParamsAction;
+import org.apache.commons.lang.StringUtils;
+import org.jenkinsci.plugins.plaincredentials.StringCredentials;
+
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -39,9 +43,6 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nullable;
-import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 public final class SonarUtils {
 
@@ -224,7 +225,39 @@ public final class SonarUtils {
     return cred.getSecret().getPlainText();
   }
 
+  public static String getAuthenticationToken(Run<?, ?> build,  String credentialsId) {
+
+    UsernamePasswordCredentials cred = getUsernamePasswordCredentials(build, credentialsId);
+    if (cred == null) {
+      throw new IllegalStateException("Unable to find credential with id '" + credentialsId + "'");
+    }
+    String username = cred.getUsername();
+    String password = cred.getPassword().getPlainText();
+    if(StringUtils.isBlank(username) || StringUtils.isBlank(password)){
+      throw new IllegalStateException("The account or password of the credential with id '" + credentialsId + "'"+" is empty");
+    }
+    return String.format("%s:%s",username,password);
+  }
+
   public static StringCredentials getCredentials(Run<?, ?> build, String credentialsId) {
     return CredentialsProvider.findCredentialById(credentialsId, StringCredentials.class, build);
+  }
+
+  private static UsernamePasswordCredentials getUsernamePasswordCredentials(Run<?, ?> build, String credentialsId) {
+    return CredentialsProvider.findCredentialById(credentialsId, StandardUsernamePasswordCredentials.class, build);
+  }
+
+  public static void addScannerParams(Run<?, ?> build,String hostUrl,String branch,String gitRepoUrl,String exclusions,
+                                      String sources,String projectKey,Long buildNumber ) {
+    SonarScannerParamsAction paramsAction = new SonarScannerParamsAction();
+    paramsAction.setBuildId(buildNumber);
+    paramsAction.setBranch(branch);
+    paramsAction.setGitRepository(gitRepoUrl);
+    paramsAction.setExclusions(exclusions);
+    paramsAction.setProjectKey(projectKey);
+    paramsAction.setProjectName(projectKey);
+    paramsAction.setSonarHostUrl(hostUrl);
+    paramsAction.setSources(sources);
+    build.addAction(paramsAction);
   }
 }

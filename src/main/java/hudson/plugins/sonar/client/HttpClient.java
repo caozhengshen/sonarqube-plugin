@@ -20,15 +20,13 @@
 package hudson.plugins.sonar.client;
 
 import com.google.common.base.Strings;
+import okhttp3.*;
+import org.sonarqube.ws.client.HttpException;
+
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import javax.annotation.Nullable;
-import okhttp3.Credentials;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
-import org.sonarqube.ws.client.HttpException;
+import java.util.Map;
 
 public class HttpClient {
   private final OkHttpClient okHttpClient;
@@ -49,10 +47,47 @@ public class HttpClient {
     }
   }
 
+  public String postHttp(String url, @Nullable String token, Map<String, String> param) {
+    Request request = newPostRequest(url,token,param);
+    Response response = httpCall(request);
+    String content = getContent(response);
+
+    if (isSuccessful(response)) {
+      return content;
+    } else {
+      throw new HttpException(url, response.code(), content);
+    }
+  }
+
   private static Request newRequest(String url, @Nullable String token) {
     Request.Builder builder = new Request.Builder().url(url);
     if (!Strings.isNullOrEmpty(token)) {
-      builder.addHeader("Authorization", Credentials.basic(token, "", StandardCharsets.UTF_8));
+      if(token.contains(":")){
+        String[] split = token.split(":");
+        builder.addHeader("Authorization", Credentials.basic(split[0], split[1], StandardCharsets.UTF_8));
+      }else {
+        builder.addHeader("Authorization", Credentials.basic(token, "", StandardCharsets.UTF_8));
+      }
+
+    }
+    return builder.build();
+  }
+
+  private static Request newPostRequest(String url, @Nullable String token,Map<String, String> param){
+    FormBody.Builder formBodyBuilder = new FormBody.Builder();
+    for (Map.Entry<String, String> entry : param.entrySet()) {
+      String key = entry.getKey();
+      String value = entry.getValue();
+      formBodyBuilder.add(key,value);
+    }
+    Request.Builder builder = new Request.Builder().post(formBodyBuilder.build()).url(url);
+    if (!Strings.isNullOrEmpty(token)) {
+      if(token.contains(":")){
+        String[] split = token.split(":");
+        builder.addHeader("Authorization", Credentials.basic(split[0], split[1], StandardCharsets.UTF_8));
+      }else {
+        builder.addHeader("Authorization", Credentials.basic(token, "", StandardCharsets.UTF_8));
+      }
     }
     return builder.build();
   }

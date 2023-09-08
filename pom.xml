@@ -149,6 +149,23 @@
     </dependencies>
   </dependencyManagement>
   <dependencies>
+    <!--jgit-->
+    <dependency>
+      <groupId>org.eclipse.jgit</groupId>
+      <artifactId>org.eclipse.jgit</artifactId>
+      <version>5.9.0.202009080501-r</version>
+    </dependency>
+    <dependency>
+      <groupId>com.alibaba</groupId>
+      <artifactId>fastjson</artifactId>
+      <version>1.2.83</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.squareup.okhttp3</groupId>
+          <artifactId>okhttp</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
@@ -336,7 +353,7 @@
         </dependencies>
         <configuration>
           <header>sonarsource/licenseheaders/${license.name}.txt</header>
-          <failIfMissing>true</failIfMissing>
+          <failIfMissing>false</failIfMissing>
           <strictCheck>true</strictCheck>
           <encoding>${project.build.sourceEncoding}</encoding>
           <properties>

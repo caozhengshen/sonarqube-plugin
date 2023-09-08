@@ -19,13 +19,19 @@
  */
 package hudson.plugins.sonar.client;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nullable;
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
 import net.sf.json.JSONSerializer;
+import org.sonarsource.scanner.jenkins.pipeline.model.SonarFacetBO;
+import org.sonarsource.scanner.jenkins.pipeline.model.SonarIssueSearchBO;
+
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class WsClient {
   private static final String STATUS_ATTR = "status";
@@ -35,10 +41,10 @@ public class WsClient {
   public static final String API_VERSION = "/api/server/version";
   public static final String API_PROJECT_NAME = "/api/projects/index?format=json&key=";
   public static final String API_CE_TASK = "/api/ce/task?id=";
-
+  public final static String SONAR_FACETS_URL = "/api/issues/search";
   private final HttpClient client;
   private final String serverUrl;
-  private final String token;
+  private String token;
 
   public WsClient(HttpClient client, String serverUrl, @Nullable String token) {
     this.client = client;
@@ -89,6 +95,27 @@ public class WsClient {
       // Should never occurs
       return param;
     }
+  }
+
+  public List<SonarFacetBO.Value> getSonarFacets( String sonarProjectKey, String type, String sinceLeakPeriod) {
+    Map<String, String> param = new HashMap<>();
+    param.put("componentKeys", sonarProjectKey);
+    param.put("s", "FILE_LINE");
+    param.put("facets", "owaspTop10,sansTop25,severities,sonarsourceSecurity,types");
+    param.put("types", type);
+    param.put("additionalFields", "_all");
+    param.put("timeZone", "Asia/Shanghai");
+    param.put("resolved", "false");
+    param.put("ps", "100");
+    param.put("sinceLeakPeriod", sinceLeakPeriod);
+    String data = client.postHttp(serverUrl+SONAR_FACETS_URL,token,param);
+    SonarIssueSearchBO facets = com.alibaba.fastjson.JSONObject.parseObject(data, SonarIssueSearchBO.class);
+    for (SonarFacetBO sonarFacetBO : facets.getFacets()) {
+      if ("severities".equals(sonarFacetBO.getProperty())) {
+        return sonarFacetBO.getValues();
+      }
+    }
+    return null;
   }
 
   public static class CETask {

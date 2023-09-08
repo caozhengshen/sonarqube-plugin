@@ -19,6 +19,7 @@
  */
 package org.sonarsource.scanner.jenkins.pipeline;
 
+import com.alibaba.fastjson.JSON;
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
@@ -27,14 +28,12 @@ import com.google.common.collect.ImmutableSet;
 import hudson.AbortException;
 import hudson.Extension;
 import hudson.Util;
-import hudson.model.FreeStyleProject;
-import hudson.model.Item;
 import hudson.model.Queue;
-import hudson.model.Run;
-import hudson.model.TaskListener;
+import hudson.model.*;
 import hudson.model.queue.Tasks;
 import hudson.plugins.sonar.SonarInstallation;
 import hudson.plugins.sonar.action.SonarAnalysisAction;
+import hudson.plugins.sonar.action.SonarScannerParamsAction;
 import hudson.plugins.sonar.client.HttpClient;
 import hudson.plugins.sonar.client.OkHttpClientSingleton;
 import hudson.plugins.sonar.client.WsClient;
@@ -42,22 +41,10 @@ import hudson.plugins.sonar.utils.SonarUtils;
 import hudson.security.ACL;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import jenkins.model.Jenkins;
 import org.apache.commons.codec.digest.HmacAlgorithms;
 import org.apache.commons.codec.digest.HmacUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.whitelists.Whitelisted;
@@ -71,6 +58,17 @@ import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
+import org.sonarsource.scanner.jenkins.pipeline.model.SonarFacetBO;
+import org.sonarsource.scanner.jenkins.pipeline.model.SonarScannerResult;
+import org.springframework.beans.BeanUtils;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
 
 public class WaitForQualityGateStep extends Step implements Serializable {
 
@@ -220,9 +218,6 @@ public class WaitForQualityGateStep extends Step implements Serializable {
       step.setServerUrl(serverUrl);
       step.setInstallationName(installationName);
       step.setCredentialsId(credentialsId);
-      if (step.webhookSecretId == null) {
-        step.webhookSecretId = getInstallation().getWebhookSecretId();
-      }
     }
 
     private void log(String msg, Object... args) {
@@ -234,9 +229,10 @@ public class WaitForQualityGateStep extends Step implements Serializable {
       SonarQubeWebHook.get().addListener(this);
 
       log("Checking status of SonarQube task '%s' on server '%s'", step.taskId, step.getInstallationName());
-      SonarInstallation inst = getInstallation();
+      //SonarInstallation inst = getInstallation();
+
       WsClient wsClient = new WsClient(new HttpClient(OkHttpClientSingleton.getInstance()),
-        step.getServerUrl(), SonarUtils.getAuthenticationToken(getContextClass(Run.class), inst, step.credentialsId));
+        step.getServerUrl(), SonarUtils.getAuthenticationToken(getContextClass(Run.class), step.credentialsId));
       WsClient.CETask ceTask = wsClient.getCETask(step.getTaskId());
       return checkQualityGate(ceTask.getStatus(), () -> wsClient.requestQualityGateStatus(ceTask.getAnalysisId()), true);
     }
@@ -293,6 +289,8 @@ public class WaitForQualityGateStep extends Step implements Serializable {
         case WsClient.CETask.STATUS_SUCCESS:
           String qgstatus = qgStatusSupplier.get();
           log("SonarQube task '%s' completed. Quality gate is '%s'", step.taskId, qgstatus);
+          SonarScannerResult detailResult = getDetailResult();
+          log("sonarscanner detail result: %s", JSON.toJSON(detailResult));
           handleQGStatus(qgstatus);
           return true;
         case WsClient.CETask.STATUS_FAILURE:
@@ -311,6 +309,36 @@ public class WaitForQualityGateStep extends Step implements Serializable {
             throw new IllegalStateException("Unexpected task status: " + taskStatus);
           }
       }
+    }
+
+    private SonarScannerResult getDetailResult() {
+      SonarScannerResult sonarScannerResult = new SonarScannerResult();
+
+      List<SonarScannerParamsAction> actions = getContextClass(Run.class).getActions(SonarScannerParamsAction.class);
+      List<SonarScannerParamsAction> reversedActions = new ArrayList<>(actions);
+      Collections.reverse(reversedActions);
+      SonarScannerParamsAction paramsAction = reversedActions.get(0);
+      BeanUtils.copyProperties(paramsAction,sonarScannerResult);
+
+      WsClient wsClient = new WsClient(new HttpClient(OkHttpClientSingleton.getInstance()),
+              step.getServerUrl(), SonarUtils.getAuthenticationToken(getContextClass(Run.class), step.credentialsId));
+      List<SonarFacetBO.Value> valueBugList = wsClient.getSonarFacets(sonarScannerResult.getProjectKey(), "BUG", "false");
+      List<SonarFacetBO.Value> valueVulList = wsClient.getSonarFacets(sonarScannerResult.getProjectKey(), "VULNERABILITY", "false");
+      Map<String,Integer> bugCount = new HashMap<>();
+      Map<String,Integer> vulCount = new HashMap<>();
+      if (CollectionUtils.isNotEmpty(valueBugList)) {
+        for (SonarFacetBO.Value value : valueBugList) {
+          bugCount.put(value.getVal(),value.getCount());
+        }
+      }
+      if (CollectionUtils.isNotEmpty(valueVulList)) {
+        for (SonarFacetBO.Value value : valueVulList) {
+          vulCount.put(value.getVal(),value.getCount());
+        }
+      }
+      sonarScannerResult.setBugCount(bugCount);
+      sonarScannerResult.setVulCount(vulCount);
+      return sonarScannerResult;
     }
 
     private boolean validateWebhook(SonarQubeWebHook.WebhookEvent event) {

@@ -61,7 +61,11 @@ public class ExtendedArgumentListBuilder {
   public void appendMasked(String key, String value) {
     String v = StringUtils.trimToEmpty(value);
     if (StringUtils.isNotEmpty(v)) {
-      builder.addMasked("-D" + key + "=" + v);
+      if (!isUnix() && value.contains("&")) {
+        builder.addMasked("\""+"-D" + key + "=" + v+"\"");
+      } else {
+        builder.addMasked("-D" + key + "=" + v);
+      }
     }
   }
 

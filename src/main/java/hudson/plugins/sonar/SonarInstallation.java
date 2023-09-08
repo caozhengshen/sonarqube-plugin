@@ -26,11 +26,12 @@ import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.plugins.sonar.model.TriggersConfig;
 import hudson.util.Secret;
-import java.io.Serializable;
-import javax.annotation.CheckForNull;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 import org.kohsuke.stapler.DataBoundConstructor;
+
+import javax.annotation.CheckForNull;
+import java.io.Serializable;
 
 public class SonarInstallation implements Serializable {
 
@@ -68,6 +69,14 @@ public class SonarInstallation implements Serializable {
   private TriggersConfig triggers;
 
   private String[] split;
+
+  public SonarInstallation(String name, String serverUrl, String credentialsId) {
+    this.name = name;
+    this.serverUrl = serverUrl;
+    this.credentialsId = credentialsId;
+    this.additionalProperties = null;
+    this.additionalAnalysisProperties = null;
+  }
 
   /**
    * Maintained to retain compatibility

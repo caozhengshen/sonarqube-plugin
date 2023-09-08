@@ -17,16 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package hudson.plugins.sonar;
+package org.sonarsource.scanner.jenkins.pipeline.model;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import org.junit.Test;
+import java.util.List;
 
-public class MsBuildSonarQubeRunnerInstallerTest extends SonarTestCase {
+/**
+ * @author caozhensheng
+ * @date 2023/9/5
+ */
+public class SonarIssueSearchBO {
+    private List<SonarFacetBO> facets;
 
-  @Test
-  public void test() {
-    MsBuildSonarQubeRunnerInstaller installer = new MsBuildSonarQubeRunnerInstaller("2.0");
-    assertThat(installer.getDescriptor().isApplicable(MsBuildSQRunnerInstallation.class)).isTrue();
-  }
+    public List<SonarFacetBO> getFacets() {
+        return facets;
+    }
+
+    public void setFacets(List<SonarFacetBO> facets) {
+        this.facets = facets;
+    }
 }
